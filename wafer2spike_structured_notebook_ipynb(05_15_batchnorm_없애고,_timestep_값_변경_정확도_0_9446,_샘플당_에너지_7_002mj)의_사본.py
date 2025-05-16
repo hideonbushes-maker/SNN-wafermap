@@ -1034,59 +1034,6 @@ with torch.no_grad():
 print("▶️ Test Classification Report:")
 print(classification_report(trues, preds, digits=4))
 
-#timestep 10 -> 5 로 변경.
-
-import torch
-import torch.nn as nn
-from sklearn.metrics import accuracy_score, classification_report
-
-# 가정: CurrentBasedSNN, train_loader, val_loader, test_loader 정의됨
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-# 최적 하이퍼파라미터
-best_groups  = 8
-best_lr      = 1e-4
-best_dropout = 0.3
-num_epochs   = 10
-
-# 1) 모델 인스턴스화
-model = CurrentBasedSNN(9, best_dropout, spike_ts=5, device=device,
-                        params=[0.05, 0.10, 0.08, 5.0])
-# GroupNorm 그룹 수 조정
-for module in model.wafer2spike.modules():
-    if isinstance(module, nn.GroupNorm):
-        module.num_groups = best_groups
-
-model = nn.DataParallel(model).to(device)
-
-# 2) 옵티마이저 및 손실함수
-optimizer = torch.optim.Adam(model.parameters(), lr=best_lr)
-criterion = nn.CrossEntropyLoss()
-
-# 3) 학습
-for epoch in range(1, num_epochs+1):
-    model.train()
-    for xb, yb in train_loader:
-        xb, yb = xb.to(device), yb.to(device)
-        optimizer.zero_grad()
-        out = model(xb)
-        loss = criterion(out, yb)
-        loss.backward()
-        optimizer.step()
-
-# 4) 테스트 평가
-model.eval()
-preds, trues = [], []
-with torch.no_grad():
-    for xb, yb in test_loader:
-        xb, yb = xb.to(device), yb.to(device)
-        pred = model(xb).argmax(dim=1)
-        preds.extend(pred.cpu().numpy())
-        trues.extend(yb.cpu().numpy())
-
-print("▶️ Test Classification Report:")
-print(classification_report(trues, preds, digits=4))
-
 # DataParallel 래퍼 해제
 model = trained_model.module if hasattr(trained_model, 'module') else trained_model
 
@@ -1138,104 +1085,9 @@ print(f"샘플당 에너지: {per_sample*1e3:.3f} mJ")
 # 7) 결과 표시
 print(f"  p0={p0:.3f} W, p1={p1:.3f} W, idle={idle_power:.3f} W, Δt={t1-t0:.4f} s")
 
-# Commented out IPython magic to ensure Python compatibility.
-# #Idle 전력 측정 (idle_duration 동안 주기적으로 전력 측정 후 평균)
-# #순수 추론 전력 계산: 측정된 전력에서 idle 평균을 빼고 적분
-# %%bash
-# cat << 'EOF' > gpu_power_measurement.py
-# import time
-# import torch
-# import pynvml
-# import pandas as pd
-# from torch.utils.data import DataLoader
-# from typing import Tuple
-# 
-# pynvml.nvmlInit()
-# _handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-# 
-# def get_gpu_power() -> float:
-#     return pynvml.nvmlDeviceGetPowerUsage(_handle) / 1000.0
-# 
-# def measure_inference_power(
-#     model: torch.nn.Module,
-#     dataloader: DataLoader,
-#     device: str = 'cuda',
-#     idle_duration: float = 1.0,
-#     sample_interval: float = 0.05
-# ) -> Tuple[float, pd.DataFrame]:
-#     # 1) Idle 전력 측정
-#     idle_samples = []
-#     t0 = time.time()
-#     while time.time() - t0 < idle_duration:
-#         idle_samples.append(get_gpu_power())
-#         time.sleep(sample_interval)
-#     idle_power = sum(idle_samples) / len(idle_samples)
-# 
-#     # 2) 추론 중 전력 측정
-#     model.eval().to(device)
-#     timestamps, raw_powers = [], []
-#     t_start = time.time()
-#     t_next = t_start
-# 
-#     with torch.no_grad():
-#         for xb, _ in dataloader:
-#             xb = xb.to(device)
-#             now = time.time()
-#             if now >= t_next:
-#                 timestamps.append(now - t_start)
-#                 raw_powers.append(get_gpu_power())
-#                 t_next += sample_interval
-#             _ = model(xb)
-# 
-#     t_end = time.time()
-#     timestamps.append(t_end - t_start)
-#     raw_powers.append(get_gpu_power())
-# 
-#     # 3) Idle 보정 및 에너지 적분
-#     corrected = [p - idle_power for p in raw_powers]
-#     energy = 0.0
-#     for i in range(len(corrected)-1):
-#         dt = timestamps[i+1] - timestamps[i]
-#         energy += max((corrected[i] + corrected[i+1]) / 2, 0.0) * dt
-# 
-#     log_df = pd.DataFrame({
-#         'time_s': timestamps,
-#         'raw_power_W': raw_powers,
-#         'idle_power_W': idle_power,
-#         'corrected_power_W': corrected
-#     })
-# 
-#     return energy, log_df
-# EOF
-
 from gpu_power_measurement import measure_inference_power
 
 # model, test_loader 준비 후
 energy, log_df = measure_inference_power(model, test_loader)
 print(f"▶️ 순수 추론 에너지: {energy:.3f} J")
 display(log_df.head())
-
-import torch
-!pip install torchviz graphviz
-from torchviz import make_dot
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = CurrentBasedSNN(N_CLASSES, DROPOUT_FC, SPIKE_TS, device, params=[0.1,0.1,0.1,0.3])
-model = nn.DataParallel(model).to(device)
-model.eval()
-
-# 더미 입력 한 배치
-x = torch.randn(1,1,36,36, device=device)
-y = model(x)
-
-# 계산 그래프를 DOT 포맷으로 생성
-dot = make_dot(y, params=dict(model.named_parameters()))
-dot.format = 'png'
-dot.render('snn_model_graph')  # SNN 구조가 snn_model_graph.png 로 저장
-
-from IPython.display import Image, display
-display(Image(filename='snn_model_graph.png'))
-dot.render(filename='/mnt/data/snn_model_graph', format='png')
-
-from google.colab import files
-files.download('/content/snn_model_graph.png')

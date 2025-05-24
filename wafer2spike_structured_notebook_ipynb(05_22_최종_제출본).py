@@ -25,7 +25,7 @@ import pandas as pd
 df = pd.read_pickle("/content/drive/MyDrive/WM-811k/LSWMD.pkl")
 
 # 4. 데이터 일부 확인
-print("✅ Wafer dataset loaded successfully!")
+print("Wafer dataset loaded successfully!")
 print(df.head())
 
 """#기존 Wafer2Spike 논문의 모델
@@ -326,7 +326,7 @@ test_loader  = DataLoader(WaferDataset(wafer_te_data, te_labels),
                           batch_size=BATCH_SIZE, shuffle=False)
 
 dataloaders = (train_loader, val_loader, test_loader)
-print(f"▶️ Cell 2 완료 — train: {len(train_loader)}, val: {len(val_loader)}, test: {len(test_loader)}")
+print(f"Cell 2 완료 — train: {len(train_loader)}, val: {len(val_loader)}, test: {len(test_loader)}")
 
 # 출력 예시
 print(f"Split ratios: Train {TRAIN_RATIO*100:.0f}%, Val {VAL_RATIO*100:.0f}%, Test {TEST_RATIO*100:.0f}%")
@@ -420,7 +420,7 @@ def training(network, params,
     print(classification_report(trues, preds))
     return model
 
-# ▶️ 학습 실행
+# 학습 실행
 trained_model = training(
     network     = CurrentBasedSNN,
     params      = [0.05, 0.1, 0.08, 0.3],
@@ -990,7 +990,7 @@ with torch.no_grad():
         preds.extend(pred.cpu().numpy())
         trues.extend(yb.cpu().numpy())
 
-print("▶️ Test Classification Report:")
+print("Test Classification Report:")
 print(classification_report(trues, preds, digits=4))
 
 #timestep 10 -> 7 로 변경.
@@ -1063,12 +1063,12 @@ with torch.no_grad():
         trues.extend(yb.cpu().numpy())
 
 # ─── 2) Classification Report ───
-print("▶️ Test Classification Report:")
+print(" Test Classification Report:")
 print(classification_report(trues, preds, digits=4))
 
 # ─── 3) Confusion Matrix (raw counts) ───
 cm = confusion_matrix(trues, preds)
-print("▶️ Confusion Matrix:")
+print(" Confusion Matrix:")
 print(cm)
 
 # ─── 4) Confusion Matrix (normalized & plot) ───
